@@ -1,5 +1,6 @@
 package com.zj.timetable
 
+import android.app.DatePickerDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -10,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
+import java.util.Calendar
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -40,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var receiver: TimetableImportReceiver
     private val calendarPermission = "com.zui.calendar.permission.ACCESS_CALENDAR"
     private val importResult = mutableStateOf<ImportResult?>(null)
+    private val queryResult = mutableStateOf<String?>(null)
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +63,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding),
                         hasPermission = checkCalendarPermission(),
                         importResult = importResult.value,
+                        queryResult = queryResult.value,
                         onRequestPermission = { launcher ->
                             launcher.launch(calendarPermission)
                         },
@@ -75,8 +79,22 @@ class MainActivity : ComponentActivity() {
                                 ).show()
                             }
                         },
+                        onQueryCourses = {
+                            if (checkCalendarPermission()) {
+                                showDatePicker()
+                            } else {
+                                Toast.makeText(
+                                    this,
+                                    "请先授予日历访问权限",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
                         onClearResult = {
                             importResult.value = null
+                        },
+                        onClearQueryResult = {
+                            queryResult.value = null
                         }
                     )
                 }
@@ -89,6 +107,73 @@ class MainActivity : ComponentActivity() {
             this,
             calendarPermission
         ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun showDatePicker() {
+        val calendar = Calendar.getInstance()
+        val year = calendar.get(Calendar.YEAR)
+        val month = calendar.get(Calendar.MONTH)
+        val day = calendar.get(Calendar.DAY_OF_MONTH)
+
+        DatePickerDialog(
+            this,
+            { _, selectedYear, selectedMonth, selectedDay ->
+                // 创建选中日期的 Calendar 对象
+                val selectedCalendar = Calendar.getInstance()
+                selectedCalendar.set(selectedYear, selectedMonth, selectedDay, 0, 0, 0)
+                val timestamp = selectedCalendar.timeInMillis
+                
+                // 调用查询接口
+                queryCoursesByDate(timestamp)
+            },
+            year,
+            month,
+            day
+        ).show()
+    }
+
+    private fun queryCoursesByDate(timestamp: Long) {
+        val calendarAuthority = "com.zui.app.calendar"
+        
+        // 检查日历应用的 ContentProvider 是否存在
+        val providerInfo = packageManager.resolveContentProvider(calendarAuthority, 0)
+        if (providerInfo == null) {
+            Toast.makeText(
+                this,
+                "未找到日历应用，请确保已安装支持该功能的日历应用",
+                Toast.LENGTH_LONG
+            ).show()
+            Log.e(TAG, "日历应用的 ContentProvider 不存在: $calendarAuthority")
+            return
+        }
+
+        val uri = "content://$calendarAuthority".toUri()
+        val extras = Bundle().apply {
+            putLong("timestamp", timestamp)
+        }
+
+        try {
+            val result = contentResolver.call(
+                uri,
+                "getCoursesByDate",
+                null,
+                extras
+            )
+
+            val coursesJson = result?.getString("courses_json")
+            if (coursesJson != null) {
+                queryResult.value = coursesJson
+                Toast.makeText(this, "查询成功", Toast.LENGTH_SHORT).show()
+                Log.d(TAG, "课程信息: $coursesJson")
+            } else {
+                queryResult.value = "无课程数据"
+                Toast.makeText(this, "无课程数据", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "查询失败: ${e.message}")
+            queryResult.value = "查询失败: ${e.message}"
+            Toast.makeText(this, "查询失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onDestroy() {
@@ -198,9 +283,12 @@ fun TimetableImportScreen(
     modifier: Modifier = Modifier,
     hasPermission: Boolean,
     importResult: MainActivity.ImportResult?,
+    queryResult: String?,
     onRequestPermission: ((androidx.activity.result.ActivityResultLauncher<String>) -> Unit),
     onImportTimetable: (Uri) -> Unit,
-    onClearResult: () -> Unit
+    onQueryCourses: () -> Unit,
+    onClearResult: () -> Unit,
+    onClearQueryResult: () -> Unit
 ) {
     val permissionGranted = remember { mutableStateOf(hasPermission) }
     
@@ -250,6 +338,15 @@ fun TimetableImportScreen(
             enabled = permissionGranted.value
         ) {
             Text("选择课程表图片")
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Button(
+            onClick = onQueryCourses,
+            enabled = permissionGranted.value
+        ) {
+            Text("查询课程")
         }
         
         // 显示导入结果
@@ -309,6 +406,46 @@ fun TimetableImportScreen(
                     
                     Button(
                         onClick = onClearResult,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("清除结果")
+                    }
+                }
+            }
+        }
+        
+        // 显示课程查询结果
+        queryResult?.let { result ->
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFE3F2FD)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "📅 课程查询结果",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1565C0),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    Text(
+                        text = result,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    
+                    Button(
+                        onClick = onClearQueryResult,
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         Text("清除结果")
