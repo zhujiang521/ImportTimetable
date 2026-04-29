@@ -1,0 +1,90 @@
+class TimetableImportActivity : AppCompatActivity() {
+
+    private lateinit var receiver: TimetableImportReceiver
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // 注册广播接收器
+        receiver = TimetableImportReceiver()
+        val filter = IntentFilter("com.zui.calendar.ACTION_TIMETABLE_IMPORT_RESULT")
+        registerReceiver(receiver, filter)
+
+        // 导入课程表
+        importTimetable()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiver(receiver)
+    }
+
+    private fun importTimetable() {
+        // 获取图片 Uri（示例）
+        val imageUri = getImageUri() // 实现获取图片Uri的逻辑
+
+        // 授予权限
+        grantUriPermission(
+            "com.zui.app.calendar",
+            imageUri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
+
+        // 调用 ContentProvider
+        val extras = Bundle().apply {
+            putString("image_uri", imageUri.toString())
+        }
+
+        try {
+            val result = contentResolver.call(
+                Uri.parse("content://com.zui.app.calendar"),
+                "importTimetableFromUri",
+                null,
+                extras
+            )
+
+            val accepted = result?.getBoolean("accepted", false) ?: false
+            if (accepted) {
+                Toast.makeText(this, "正在识别课程表...", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "请求被拒绝", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "调用失败: ${e.message}")
+            Toast.makeText(this, "调用失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private inner class TimetableImportReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val success = intent.getBooleanExtra("success", false)
+            val scheduleId = intent.getLongExtra("schedule_id", -1)
+            val errorCode = intent.getIntExtra("error_code", 0)
+            val errorMessage = intent.getStringExtra("error_message")
+
+            if (success) {
+                Toast.makeText(
+                    context,
+                    "导入成功，课表ID: $scheduleId",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                val message = when (errorCode) {
+                    1001 -> "图片Uri无效"
+                    1002 -> "网络不可用"
+                    1003 -> "请先登录账号"
+                    1004 -> "图片加载失败"
+                    1006 -> "图片中未识别到课程表"
+                    1009 -> "识别超时，请重试"
+                    2001 -> "正在处理其他导入请求"
+                    else -> errorMessage ?: "导入失败"
+                }
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "TimetableImportActivity"
+    }
+}
