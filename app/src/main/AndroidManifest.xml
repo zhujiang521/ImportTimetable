@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="com.zui.calendar.permission.ACCESS_CALENDAR" />
+    <uses-permission android:name="com.zui.calendar.permission.READ_CURRICULUM" />
+    <uses-permission android:name="com.zui.calendar.permission.WRITE_CURRICULUM" />
 
     <queries>
         <package android:name="com.zui.app.calendar" />
@@ -29,6 +31,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ApiTestActivity"
+            android:exported="false"
+            android:label="API测试工具"
+            android:theme="@style/Theme.ImportTimetable" />
+
     </application>
 
 </manifest>

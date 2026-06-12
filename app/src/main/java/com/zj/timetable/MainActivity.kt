@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -89,6 +90,13 @@ class MainActivity : ComponentActivity() {
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
+                        },
+                        onOpenTest = {
+                            // 打开API测试工具
+                            val intent = Intent(this, ApiTestActivity::class.java)
+                            startActivity(intent)
+                        },
+                        onOpenScheduleTest = {
                         },
                         onClearResult = {
                             importResult.value = null
@@ -287,6 +295,8 @@ fun TimetableImportScreen(
     onRequestPermission: ((androidx.activity.result.ActivityResultLauncher<String>) -> Unit),
     onImportTimetable: (Uri) -> Unit,
     onQueryCourses: () -> Unit,
+    onOpenTest: () -> Unit,
+    onOpenScheduleTest: () -> Unit,
     onClearResult: () -> Unit,
     onClearQueryResult: () -> Unit
 ) {
@@ -349,6 +359,27 @@ fun TimetableImportScreen(
             Text("查询课程")
         }
         
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Button(
+            onClick = onOpenTest,
+            enabled = permissionGranted.value
+        ) {
+            Text("🧪 API测试工具")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = onOpenScheduleTest,
+            enabled = permissionGranted.value,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary
+            )
+        ) {
+            Text("📚 课程表测试")
+        }
+
         // 显示导入结果
         importResult?.let { result ->
             Spacer(modifier = Modifier.height(32.dp))
